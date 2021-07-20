@@ -24,7 +24,7 @@ from utils.plots import colors, plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 import os
 from Frame_Cut import Cut
-from collections import deque
+import Frame_Cut_gray
 
 @torch.no_grad()
 def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
@@ -56,6 +56,7 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
     for i in range(len(file_list)):
         file_list[i] = 'data/videos/'+file_list[i]
     Cut(file_list)
+    # Frame_Cut_gray.Cut(file_list)
     source = 'data/cut_videos'
 
     avg = 0
