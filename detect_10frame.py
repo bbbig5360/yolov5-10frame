@@ -60,7 +60,6 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
 
     avg = 0
     avg_list = []
-    # person_num_list = deque()
     person_num_list = []
     fsize = 10
 
@@ -155,7 +154,6 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
                     print(person_num_list)
 
                     if len(person_num_list)==fsize:
-                        # avg = MovAvgFilter.MoveAvgFilter(person_num_list, fsize)
                         avg = int(sum(person_num_list)/fsize)
                         person_num_list = []
                         print('AVERAGE = {}'.format(avg))
@@ -184,7 +182,6 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
                 print(person_num_list)
 
                 if len(person_num_list)==fsize:
-                        # avg = MovAvgFilter.MoveAvgFilter(person_num_list, fsize)
                         avg = int(sum(person_num_list)/fsize)
                         person_num_list = []
                         print('AVERAGE = {}'.format(avg)) 
@@ -218,7 +215,9 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
 
-    print(avg_list)
+    # DB update.
+    # if avg_list:
+    #     insert_db(avg_list)
 
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
