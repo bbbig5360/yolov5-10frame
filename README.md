@@ -30,5 +30,10 @@
 실행 방법 :
 - 2cam.py를 실행합니다.
 
-https://youtu.be/fPqxtxooiqU
-해당 링크로 가시면 코드의  영상들을 확인할 수 있습니다.
+아래의 링크로 가시면 코드의  영상들을 확인할 수 있습니다.
+- YOLOv5 인구 수 검출 : https://youtu.be/fPqxtxooiqU
+- 동영상 Grayscale 후 인구 수 검출 : https://youtu.be/t4DEhXqRZas
+- 7개의 동영상 마지막 10프레임 잘라서 Grayscale 후 인구 수 검출 : https://youtu.be/-GaYLaq8Nj8
+- 실시간으로 2대의 카메라를 이용해 7개의 10프레임 영상 만들어 인구 수 검출(코드 변경 필요) : https://youtu.be/OCB-VaXAOg4
+
+
