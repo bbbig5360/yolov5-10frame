@@ -22,13 +22,11 @@ from utils.general import check_img_size, check_requirements, check_imshow, colo
     apply_classifier, scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, save_one_box
 from utils.plots import colors, plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
-import os
-from Frame_Cut import Cut
-import Frame_Cut_gray
+# from db.cctv_db_insert import insert_query
 
 @torch.no_grad()
 def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
-        source='data/5videos',  # file/dir/URL/glob, 0 for webcam
+        source='data/cut_videos',  # file/dir/URL/glob, 0 for webcam
         imgsz=640,  # inference size (pixels)
         conf_thres=0.3,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
@@ -51,12 +49,10 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
         hide_conf=False,  # hide confidences
         half=False,  # use FP16 half-precision inference
         ):
-    v_path = source
-    file_list = os.listdir(v_path)
-    for i in range(len(file_list)):
-        file_list[i] = 'data/videos/'+file_list[i]
-    Cut(file_list)
-    # Frame_Cut_gray.Cut(file_list)
+    view_img = True
+    save_img = not nosave and not source.endswith('.txt')  # save inference images
+    webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
+        ('rtsp://', 'rtmp://', 'http://', 'https://'))
     source = 'data/cut_videos'
 
     avg = 0
@@ -64,12 +60,6 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
     person_num_list = []
     fsize = 10
 
-    view_img = True
-    
-    save_img = not nosave and not source.endswith('.txt')  # save inference images
-    webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
-        ('rtsp://', 'rtmp://', 'http://', 'https://'))
-    
     # Directories
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
@@ -133,92 +123,90 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
                 p, s, im0, frame = path[i], f'{i}: ', im0s[i].copy(), dataset.count
             else:
                 p, s, im0, frame = path, '', im0s.copy(), getattr(dataset, 'frame', 0)
-            # if frame > 10:
-            #     pass
-            # else:
-            p = Path(p)  # to Path
-            save_path = str(save_dir / p.name)  # img.jpg
-            txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
-            s += '%gx%g ' % img.shape[2:]  # print string
-            gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
-            imc = im0.copy() if save_crop else im0  # for save_crop
+            if frame > 10:
+                pass
+            else:
+                p = Path(p)  # to Path
+                save_path = str(save_dir / p.name)  # img.jpg
+                txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
+                s += '%gx%g ' % img.shape[2:]  # print string
+                gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+                imc = im0.copy() if save_crop else im0  # for save_crop
 
-            if len(det):
-                # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
-                # Print results
+                if len(det):
+                    # Rescale boxes from img_size to im0 size
+                    det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+                    # Print results
 
-                for c in det[:, -1].unique():
-                    n = (det[:, -1] == c).sum()  # detections per class
-                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-                    person_num_list.append(int(n))
+                    for c in det[:, -1].unique():
+                        n = (det[:, -1] == c).sum()  # detections per class
+                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                        person_num_list.append(int(n))
+                        print(person_num_list)
+
+                        if len(person_num_list)==fsize:
+                            avg = round(sum(person_num_list)/fsize)
+                            person_num_list = []
+                            avg_list.append(avg)
+                            print('AVERAGE = {}'.format(avg))
+                                                        
+                    # Write results
+                    for *xyxy, conf, cls in reversed(det):
+                        if save_txt:  # Write to file
+                            xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                            line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
+                            with open(txt_path + '.txt', 'a') as f:
+                                f.write(('%g ' * len(line)).rstrip() % line + '\n')
+
+                        if save_img or save_crop or view_img:  # Add bbox to image
+                            c = int(cls)  # integer class
+                            label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+                            plot_one_box(xyxy, im0, label=label, color=(0,255,255), line_thickness=line_thickness)
+                            text = 'person : ' + str(int(n))
+                            cv2.putText(im0, text, (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 1, cv2.LINE_AA )
+                            
+                            if save_crop:
+                                save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                else:                
+                    person_num_list.append(0)
                     print(person_num_list)
 
                     if len(person_num_list)==fsize:
-                        avg = int(sum(person_num_list)/fsize)
-                        person_num_list = []
-                        print('AVERAGE = {}'.format(avg))
-                        avg_list.append(avg)
-                        print(avg_list)
-                           
-                # Write results
-                for *xyxy, conf, cls in reversed(det):
-                    if save_txt:  # Write to file
-                        xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                        line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
-                        with open(txt_path + '.txt', 'a') as f:
-                            f.write(('%g ' * len(line)).rstrip() % line + '\n')
+                            avg = round(sum(person_num_list)/fsize)
+                            person_num_list = []
+                            avg_list.append(avg)
+                            print('AVERAGE = {}'.format(avg)) 
 
-                    if save_img or save_crop or view_img:  # Add bbox to image
-                        c = int(cls)  # integer class
-                        label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                        plot_one_box(xyxy, im0, label=label, color=(0,255,255), line_thickness=line_thickness)
-                        text = 'person : ' + str(int(n))
-                        cv2.putText(im0, text, (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 1, cv2.LINE_AA )
-                        
-                        if save_crop:
-                            save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
-            else:                
-                person_num_list.append(0)
-                print(person_num_list)
+                # Print time (inference + NMS)
+                print(f'{s}Done. ({t2 - t1:.3f}s)')
 
-                if len(person_num_list)==fsize:
-                        avg = int(sum(person_num_list)/fsize)
-                        person_num_list = []
-                        print('AVERAGE = {}'.format(avg)) 
-                        avg_list.append(avg)
-                        print(avg_list)
+                # Stream results
+                if view_img:
+                    cv2.imshow(str(p), im0)
+                    cv2.waitKey(1)  # 1 millisecond
+        
+                # Save results (image with detections)
+                # if save_img:
+                #     if dataset.mode == 'image':
+                #         cv2.imwrite(save_path, im0)
+                #     else:  # 'video' or 'stream'
+                #         if vid_path != save_path:  # new video
+                #             vid_path = save_path
+                #             if isinstance(vid_writer, cv2.VideoWriter):
+                #                 vid_writer.release()  # release previous video writer
+                #             if vid_cap:  # video
+                #                 fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                #                 w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                #                 h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                #             else:  # stream
+                #                 fps, w, h = 30, im0.shape[1], im0.shape[0]
+                #                 save_path += '.mp4'
+                #             vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                #         vid_writer.write(im0)
 
-            # Print time (inference + NMS)
-            print(f'{s}Done. ({t2 - t1:.3f}s)')
-
-            # Stream results
-            if view_img:
-                cv2.imshow(str(p), im0)
-                cv2.waitKey(1)  # 1 millisecond
-    
-            # Save results (image with detections)
-            if save_img:
-                if dataset.mode == 'image':
-                    cv2.imwrite(save_path, im0)
-                else:  # 'video' or 'stream'
-                    if vid_path != save_path:  # new video
-                        vid_path = save_path
-                        if isinstance(vid_writer, cv2.VideoWriter):
-                            vid_writer.release()  # release previous video writer
-                        if vid_cap:  # video
-                            fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                            w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                            h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        else:  # stream
-                            fps, w, h = 30, im0.shape[1], im0.shape[0]
-                            save_path += '.mp4'
-                        vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-                    vid_writer.write(im0)
-
-    # DB update.
-    # if avg_list:
-    #     insert_db(avg_list)
+    # DB 업데이트
+    # print(avg_list)
+    # insert_query(avg_list)
 
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
@@ -229,16 +217,13 @@ def run(weights='yolov5s_1500_30.pt',  # model.pt path(s)
 
     print(f'Done. ({time.time() - t0:.3f}s)')
 
-    
-
-
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default='yolov5s_1500_30.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='data/videos/', help='file/dir/URL/glob, 0 for webcam')
+    parser.add_argument('--source', type=str, default='data/cut_videos/', help='file/dir/URL/glob, 0 for webcam')
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.4, help='NMS IoU threshold')
+    parser.add_argument('--iou-thres', type=float, default=0.45, help='NMS IoU threshold')
     parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--view-img', action='store_true', help='show results')
@@ -260,14 +245,9 @@ def parse_opt():
     opt = parser.parse_args()
     return opt
 
-
-def main(opt):
+def yolo_start():
+    opt = parse_opt()
     print(colorstr('detect: ') + ', '.join(f'{k}={v}' for k, v in vars(opt).items()))
+    check_requirements(exclude=('tensorboard', 'thop'))
     run(**vars(opt))
 
-
-if __name__ == "__main__":
-    opt = parse_opt()
-    main(opt)
-
-# python detect.py --source {동영상 path} --weights yolov5s_1500_30.pt --conf {threshold값}
